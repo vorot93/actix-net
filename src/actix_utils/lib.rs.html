@@ -11,6 +11,9 @@
 <span id="10">10</span>
 <span id="11">11</span>
 <span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="doccomment">//! Various network related services and utilities for the Actix ecosystem.</span>
 
@@ -22,8 +25,11 @@
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">counter</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">dispatcher</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mpsc</span>;
+<span class="kw">mod</span> <span class="ident">poll_fn</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">task</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">timeout</span>;
+
+<span class="kw">use</span> <span class="self">self</span>::<span class="ident">poll_fn</span>::<span class="ident">poll_fn</span>;
 </pre></div>
 </section><section id="search" class="content hidden"></section><section class="footer"></section><div id="rustdoc-vars" data-root-path="../../" data-current-crate="actix_utils"></div>
     <script src="../../main.js"></script><script src="../../source-script.js"></script><script src="../../source-files.js"></script><script defer src="../../search-index.js"></script></body></html>
