@@ -501,6 +501,9 @@
 <span id="500">500</span>
 <span id="501">501</span>
 <span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
 </pre><div class="example-wrap"><pre class="rust ">
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">future::Future</span>,
@@ -629,6 +632,8 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// Worker accepts Socket objects via unbounded channel and starts stream processing.</span>
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">ServerWorker</span> {
+    <span class="comment">// UnboundedReceiver&lt;Conn&gt; should always be the first field.</span>
+    <span class="comment">// It must be dropped as soon as ServerWorker dropping.</span>
     <span class="ident">rx</span>: <span class="ident">UnboundedReceiver</span><span class="op">&lt;</span><span class="ident">Conn</span><span class="op">&gt;</span>,
     <span class="ident">rx2</span>: <span class="ident">UnboundedReceiver</span><span class="op">&lt;</span><span class="ident">Stop</span><span class="op">&gt;</span>,
     <span class="ident">services</span>: <span class="ident">Box</span><span class="op">&lt;</span>[<span class="ident">WorkerService</span>]<span class="op">&gt;</span>,
@@ -874,6 +879,7 @@
 
 <span class="kw">impl</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">ServerWorker</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>) {
+        <span class="comment">// Stop the Arbiter ServerWorker runs on on drop.</span>
         <span class="ident">Arbiter::current</span>().<span class="ident">stop</span>();
     }
 }
