@@ -1,6 +1,38 @@
 # Changes
 
 ## Unreleased - 2021-xx-xx
+* Resource definitions with unnamed tail segments now correctly interpolate the tail when constructed from an iterator. [#371]
+* Introduce `ResourceDef::resource_path_from_map_with_tail` method to allow building paths in the presence of unnamed tail segments. [#371]
+* Fix segment interpolation leaving `Path` in unintended state after matching. [#368]
+* Path tail pattern now works as expected after a dynamic segment (e.g. `/user/{uid}/*`). [#366]
+* Fixed a bug where, in multi-patterns, static patterns are interpreted as regex. [#366]
+* Re-work `IntoPatterns` trait. [#372]
+* Rename `Path::{len => segment_count}` to be more descriptive of it's purpose. [#370]
+* Alias `ResourceDef::{resource_path => resource_path_from_iter}` pending eventual deprecation. [#371]
+* Alias `ResourceDef::{resource_path_named => resource_path_from_map}` pending eventual deprecation. [#371]
+
+[#368]: https://github.com/actix/actix-net/pull/368
+[#366]: https://github.com/actix/actix-net/pull/366
+[#368]: https://github.com/actix/actix-net/pull/368
+[#370]: https://github.com/actix/actix-net/pull/370
+[#371]: https://github.com/actix/actix-net/pull/371
+[#372]: https://github.com/actix/actix-net/pull/372
+
+
+## 0.4.0 - 2021-06-06
+* When matching path parameters, `%25` is now kept in the percent-encoded form; no longer decoded to `%`. [#357]
+* Path tail patterns now match new lines (`\n`) in request URL. [#360]
+* Fixed a safety bug where `Path` could return a malformed string after percent decoding. [#359]
+* Methods `Path::{add, add_static}` now take `impl Into<Cow<'static, str>>`. [#345]
+
+[#345]: https://github.com/actix/actix-net/pull/345
+[#357]: https://github.com/actix/actix-net/pull/357
+[#359]: https://github.com/actix/actix-net/pull/359
+[#360]: https://github.com/actix/actix-net/pull/360
+
+
+## 0.3.0 - 2019-12-31
+* Version was yanked previously. See https://crates.io/crates/actix-router/0.3.0
 
 
 ## 0.2.7 - 2021-02-06
