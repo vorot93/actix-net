@@ -2,29 +2,25 @@
 
 > A collection of lower-level libraries for composable network services.
 
-![Apache 2.0 or MIT licensed](https://img.shields.io/crates/l/actix-server)
-[![codecov](https://codecov.io/gh/actix/actix-net/branch/master/graph/badge.svg)](https://codecov.io/gh/actix/actix-net)
+[![CI](https://github.com/actix/actix-net/actions/workflows/ci.yml/badge.svg?event=push&style=flat-square)](https://github.com/actix/actix-net/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/actix/actix-net/graph/badge.svg?token=8rKIZKtLLm)](https://codecov.io/gh/actix/actix-net)
 [![Chat on Discord](https://img.shields.io/discord/771444961383153695?label=chat&logo=discord)](https://discord.gg/NWpN5mmg3x)
+[![Dependency Status](https://deps.rs/repo/github/actix/actix-net/status.svg)](https://deps.rs/repo/github/actix/actix-net)
 
-## Build statuses
-| Platform         | Build Status |
-| ---------------- | ------------ |
-| Linux            | [![build status](https://github.com/actix/actix-net/workflows/CI%20%28Linux%29/badge.svg?branch=master&event=push)](https://github.com/actix/actix-net/actions?query=workflow%3A"CI+(Linux)") |
-| macOS            | [![build status](https://github.com/actix/actix-net/workflows/CI%20%28macOS%29/badge.svg?branch=master&event=push)](https://github.com/actix/actix-net/actions?query=workflow%3A"CI+(macOS)") |
-| Windows          | [![build status](https://github.com/actix/actix-net/workflows/CI%20%28Windows%29/badge.svg?branch=master&event=push)](https://github.com/actix/actix-net/actions?query=workflow%3A"CI+(Windows)") |
-| Windows (MinGW)  | [![build status](https://github.com/actix/actix-net/workflows/CI%20%28Windows-mingw%29/badge.svg?branch=master&event=push)](https://github.com/actix/actix-net/actions?query=workflow%3A"CI+(Windows-mingw)") |
+## Examples
 
-## Example
-See `actix-server/examples` and `actix-tls/examples` for some basic examples.
+See example folders for [`actix-server`](./actix-server/examples) and [`actix-tls`](./actix-tls/examples).
 
-### MSRV
-This repo's Minimum Supported Rust Version (MSRV) is 1.46.0.
+## MSRV
+
+Crates in this repo currently have a Minimum Supported Rust Version (MSRV) of 1.65. As a policy, we permit MSRV increases in non-breaking releases.
 
 ## License
-This project is licensed under either of
 
-* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0))
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
+The crates in repo are licensed under either of:
+
+- Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0))
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
 
 at your option.
 

@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 #![cfg(feature = "connect")]
 
 use std::{
@@ -8,9 +9,10 @@ use std::{
 use actix_rt::net::TcpStream;
 use actix_server::TestServer;
 use actix_service::{fn_service, Service, ServiceFactory};
+use actix_tls::connect::{
+    ConnectError, ConnectInfo, Connection, Connector, Host, Resolve, Resolver,
+};
 use futures_core::future::LocalBoxFuture;
-
-use actix_tls::connect::{new_connector_factory, Connect, Resolve, Resolver};
 
 #[actix_rt::test]
 async fn custom_resolver() {
@@ -24,7 +26,7 @@ async fn custom_resolver() {
             port: u16,
         ) -> LocalBoxFuture<'a, Result<Vec<SocketAddr>, Box<dyn std::error::Error>>> {
             Box::pin(async move {
-                let local = format!("127.0.0.1:{}", port).parse().unwrap();
+                let local = format!("127.0.0.1:{port}").parse().unwrap();
                 Ok(vec![local])
             })
         }
@@ -36,13 +38,24 @@ async fn custom_resolver() {
 
 #[actix_rt::test]
 async fn custom_resolver_connect() {
-    use trust_dns_resolver::TokioAsyncResolver;
+    pub fn connector_factory<T: Host + 'static>(
+        resolver: Resolver,
+    ) -> impl ServiceFactory<
+        ConnectInfo<T>,
+        Config = (),
+        Response = Connection<T, TcpStream>,
+        Error = ConnectError,
+        InitError = (),
+    > {
+        Connector::new(resolver)
+    }
 
-    let srv =
-        TestServer::with(|| fn_service(|_io: TcpStream| async { Ok::<_, io::Error>(()) }));
+    use hickory_resolver::TokioResolver;
+
+    let srv = TestServer::start(|| fn_service(|_io: TcpStream| async { Ok::<_, io::Error>(()) }));
 
     struct MyResolver {
-        trust_dns: TokioAsyncResolver,
+        hickory_dns: TokioResolver,
     }
 
     impl Resolve for MyResolver {
@@ -53,7 +66,7 @@ async fn custom_resolver_connect() {
         ) -> LocalBoxFuture<'a, Result<Vec<SocketAddr>, Box<dyn std::error::Error>>> {
             Box::pin(async move {
                 let res = self
-                    .trust_dns
+                    .hickory_dns
                     .lookup_ip(host)
                     .await?
                     .iter()
@@ -65,15 +78,14 @@ async fn custom_resolver_connect() {
     }
 
     let resolver = MyResolver {
-        trust_dns: TokioAsyncResolver::tokio_from_system_conf().unwrap(),
+        hickory_dns: TokioResolver::builder_tokio().unwrap().build(),
     };
 
-    let resolver = Resolver::new_custom(resolver);
-    let factory = new_connector_factory(resolver);
+    let factory = connector_factory(Resolver::custom(resolver));
 
     let conn = factory.new_service(()).await.unwrap();
     let con = conn
-        .call(Connect::with_addr("example.com", srv.addr()))
+        .call(ConnectInfo::with_addr("example.com", srv.addr()))
         .await
         .unwrap();
     assert_eq!(con.peer_addr().unwrap(), srv.addr());

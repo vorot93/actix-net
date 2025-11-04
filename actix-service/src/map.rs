@@ -15,7 +15,7 @@ use super::{Service, ServiceFactory};
 pub struct Map<A, F, Req, Res> {
     service: A,
     f: F,
-    _t: PhantomData<(Req, Res)>,
+    _t: PhantomData<fn(Req) -> Res>,
 }
 
 impl<A, F, Req, Res> Map<A, F, Req, Res> {
@@ -97,7 +97,7 @@ where
 
         match this.fut.poll(cx) {
             Poll::Ready(Ok(resp)) => Poll::Ready(Ok((this.f)(resp))),
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -107,7 +107,7 @@ where
 pub struct MapServiceFactory<A, F, Req, Res> {
     a: A,
     f: F,
-    r: PhantomData<(Res, Req)>,
+    r: PhantomData<fn(Req) -> Res>,
 }
 
 impl<A, F, Req, Res> MapServiceFactory<A, F, Req, Res> {
@@ -202,9 +202,7 @@ mod tests {
     use futures_util::future::lazy;
 
     use super::*;
-    use crate::{
-        ok, IntoServiceFactory, Ready, Service, ServiceExt, ServiceFactory, ServiceFactoryExt,
-    };
+    use crate::{ok, IntoServiceFactory, Ready, ServiceExt, ServiceFactoryExt};
 
     struct Srv;
 

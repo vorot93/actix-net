@@ -10,7 +10,7 @@
 //! the length of each line it echos and the total size of data sent when the connection is closed.
 
 use std::{
-    env, io,
+    io,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -22,22 +22,20 @@ use actix_server::Server;
 use actix_service::{fn_service, ServiceFactoryExt as _};
 use bytes::BytesMut;
 use futures_util::future::ok;
-use log::{error, info};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
-#[actix_rt::main]
-async fn main() -> io::Result<()> {
-    env::set_var("RUST_LOG", "info");
-    env_logger::init();
+async fn run() -> io::Result<()> {
+    pretty_env_logger::formatted_timed_builder()
+        .parse_env(pretty_env_logger::env_logger::Env::default().default_filter_or("info"));
 
     let count = Arc::new(AtomicUsize::new(0));
 
     let addr = ("127.0.0.1", 8080);
-    info!("starting server on port: {}", &addr.0);
+    tracing::info!("starting server on port: {}", &addr.0);
 
-    // Bind socket address and start worker(s). By default, the server uses the number of available
-    // logical CPU cores as the worker count. For this reason, the closure passed to bind needs
-    // to return a service *factory*; so it can be created once per worker.
+    // Bind socket address and start worker(s). By default, the server uses the number of physical
+    // CPU cores as the worker count. For this reason, the closure passed to bind needs to return
+    // a service *factory*; so it can be created once per worker.
     Server::build()
         .bind("echo", addr, move || {
             let count = Arc::clone(&count);
@@ -60,14 +58,14 @@ async fn main() -> io::Result<()> {
 
                             // more bytes to process
                             Ok(bytes_read) => {
-                                info!("[{}] read {} bytes", num, bytes_read);
+                                tracing::info!("[{}] read {} bytes", num, bytes_read);
                                 stream.write_all(&buf[size..]).await.unwrap();
                                 size += bytes_read;
                             }
 
                             // stream error; bail from loop with error
                             Err(err) => {
-                                error!("Stream Error: {:?}", err);
+                                tracing::error!("stream error: {:?}", err);
                                 return Err(());
                             }
                         }
@@ -77,14 +75,27 @@ async fn main() -> io::Result<()> {
                     Ok((buf.freeze(), size))
                 }
             })
-            .map_err(|err| error!("Service Error: {:?}", err))
+            .map_err(|err| tracing::error!("service error: {:?}", err))
             .and_then(move |(_, size)| {
                 let num = num2.load(Ordering::SeqCst);
-                info!("[{}] total bytes read: {}", num, size);
+                tracing::info!("[{}] total bytes read: {}", num, size);
                 ok(size)
             })
         })?
-        .workers(1)
+        .workers(2)
         .run()
         .await
 }
+
+#[tokio::main]
+async fn main() -> io::Result<()> {
+    run().await?;
+    Ok(())
+}
+
+// alternatively:
+// #[actix_rt::main]
+// async fn main() -> io::Result<()> {
+//     run().await?;
+//     Ok(())
+// }

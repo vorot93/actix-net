@@ -1,11 +1,21 @@
 # Changes
 
-## Unreleased - 2021-xx-xx
+## Unreleased
 
+- Minimum supported Rust version (MSRV) is now 1.76.
 
-## 0.1.2 - 2021-04-01
-* Fix crate metadata.
+## 0.1.4
 
+- Minimum supported Rust version (MSRV) is now 1.65.
 
-## 0.1.1 - 2021-03-29
-* Move `LocalWaker` to it's own crate.
+## 0.1.3
+
+- Minimum supported Rust version (MSRV) is now 1.49.
+
+## 0.1.2
+
+- Fix crate metadata.
+
+## 0.1.1
+
+- Move `LocalWaker` to it's own crate.

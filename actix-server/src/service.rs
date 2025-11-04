@@ -1,35 +1,37 @@
-use std::marker::PhantomData;
-use std::net::SocketAddr;
-use std::task::{Context, Poll};
+use std::{
+    marker::PhantomData,
+    net::SocketAddr,
+    task::{Context, Poll},
+};
 
 use actix_service::{Service, ServiceFactory as BaseServiceFactory};
-use actix_utils::{
-    counter::CounterGuard,
-    future::{ready, Ready},
-};
+use actix_utils::future::{ready, Ready};
 use futures_core::future::LocalBoxFuture;
-use log::error;
+use tracing::error;
 
-use crate::socket::{FromStream, MioStream};
-use crate::Token;
+use crate::{
+    socket::{FromStream, MioStream},
+    worker::WorkerCounterGuard,
+};
 
-pub trait ServiceFactory<Stream: FromStream>: Send + Clone + 'static {
+#[doc(hidden)]
+pub trait ServerServiceFactory<Stream: FromStream>: Send + Clone + 'static {
     type Factory: BaseServiceFactory<Stream, Config = ()>;
 
     fn create(&self) -> Self::Factory;
 }
 
 pub(crate) trait InternalServiceFactory: Send {
-    fn name(&self, token: Token) -> &str;
+    fn name(&self, token: usize) -> &str;
 
     fn clone_factory(&self) -> Box<dyn InternalServiceFactory>;
 
-    fn create(&self) -> LocalBoxFuture<'static, Result<Vec<(Token, BoxedServerService)>, ()>>;
+    fn create(&self) -> LocalBoxFuture<'static, Result<(usize, BoxedServerService), ()>>;
 }
 
 pub(crate) type BoxedServerService = Box<
     dyn Service<
-        (CounterGuard, MioStream),
+        (WorkerCounterGuard, MioStream),
         Response = (),
         Error = (),
         Future = Ready<Result<(), ()>>,
@@ -50,7 +52,7 @@ impl<S, I> StreamService<S, I> {
     }
 }
 
-impl<S, I> Service<(CounterGuard, MioStream)> for StreamService<S, I>
+impl<S, I> Service<(WorkerCounterGuard, MioStream)> for StreamService<S, I>
 where
     S: Service<I>,
     S::Future: 'static,
@@ -65,7 +67,7 @@ where
         self.service.poll_ready(ctx).map_err(|_| ())
     }
 
-    fn call(&self, (guard, req): (CounterGuard, MioStream)) -> Self::Future {
+    fn call(&self, (guard, req): (WorkerCounterGuard, MioStream)) -> Self::Future {
         ready(match FromStream::from_mio(req) {
             Ok(stream) => {
                 let f = self.service.call(stream);
@@ -75,30 +77,30 @@ where
                 });
                 Ok(())
             }
-            Err(e) => {
-                error!("Can not convert to an async tcp stream: {}", e);
+            Err(err) => {
+                error!("can not convert to an async TCP stream: {err}");
                 Err(())
             }
         })
     }
 }
 
-pub(crate) struct StreamNewService<F: ServiceFactory<Io>, Io: FromStream> {
+pub(crate) struct StreamNewService<F: ServerServiceFactory<Io>, Io: FromStream> {
     name: String,
     inner: F,
-    token: Token,
+    token: usize,
     addr: SocketAddr,
     _t: PhantomData<Io>,
 }
 
 impl<F, Io> StreamNewService<F, Io>
 where
-    F: ServiceFactory<Io>,
+    F: ServerServiceFactory<Io>,
     Io: FromStream + Send + 'static,
 {
     pub(crate) fn create(
         name: String,
-        token: Token,
+        token: usize,
         inner: F,
         addr: SocketAddr,
     ) -> Box<dyn InternalServiceFactory> {
@@ -114,10 +116,10 @@ where
 
 impl<F, Io> InternalServiceFactory for StreamNewService<F, Io>
 where
-    F: ServiceFactory<Io>,
+    F: ServerServiceFactory<Io>,
     Io: FromStream + Send + 'static,
 {
-    fn name(&self, _: Token) -> &str {
+    fn name(&self, _: usize) -> &str {
         &self.name
     }
 
@@ -131,14 +133,14 @@ where
         })
     }
 
-    fn create(&self) -> LocalBoxFuture<'static, Result<Vec<(Token, BoxedServerService)>, ()>> {
+    fn create(&self) -> LocalBoxFuture<'static, Result<(usize, BoxedServerService), ()>> {
         let token = self.token;
         let fut = self.inner.create().new_service(());
         Box::pin(async move {
             match fut.await {
                 Ok(inner) => {
                     let service = Box::new(StreamService::new(inner)) as _;
-                    Ok(vec![(token, service)])
+                    Ok((token, service))
                 }
                 Err(_) => Err(()),
             }
@@ -146,7 +148,7 @@ where
     }
 }
 
-impl<F, T, I> ServiceFactory<I> for F
+impl<F, T, I> ServerServiceFactory<I> for F
 where
     F: Fn() -> T + Send + Clone + 'static,
     T: BaseServiceFactory<I, Config = ()>,

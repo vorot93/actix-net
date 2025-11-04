@@ -1,131 +1,133 @@
 name: CI
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-  push:
-    branches: [master]
+  pull_request: {}
+  merge_group: { types: [checks_requested] }
+  push: { branches: [master] }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  read_msrv:
+    name: Read MSRV
+    uses: actions-rust-lang/msrv/.github/workflows/msrv.yml@v0.1.0
+
   build_and_test:
+    needs:
+      - read_msrv
+
     strategy:
       fail-fast: false
       matrix:
+        # prettier-ignore
         target:
           - { name: Linux, os: ubuntu-latest, triple: x86_64-unknown-linux-gnu }
           - { name: macOS, os: macos-latest, triple: x86_64-apple-darwin }
           - { name: Windows, os: windows-latest, triple: x86_64-pc-windows-msvc }
           - { name: Windows (MinGW), os: windows-latest, triple: x86_64-pc-windows-gnu }
-          - { name: Windows (32-bit), os: windows-latest, triple: i686-pc-windows-msvc }
         version:
-          - 1.46.0 # MSRV
-          - stable
-          - nightly
+          - { name: msrv, version: "${{ needs.read_msrv.outputs.msrv }}" }
+          - { name: stable, version: stable }
 
-    name: ${{ matrix.target.name }} / ${{ matrix.version }}
+    name: ${{ matrix.target.name }} / ${{ matrix.version.name }}
     runs-on: ${{ matrix.target.os }}
 
-    env:
-      VCPKGRS_DYNAMIC: 1
+    env: {}
 
     steps:
       - name: Setup Routing
         if: matrix.target.os == 'macos-latest'
         run: sudo ifconfig lo0 alias 127.0.0.3
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v5
 
-      # install OpenSSL on Windows
-      - name: Set vcpkg root
-        if: matrix.target.triple == 'x86_64-pc-windows-msvc' || matrix.target.triple == 'i686-pc-windows-msvc'
-        run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Free Disk Space
+        if: matrix.target.os == 'ubuntu-latest'
+        run: ./scripts/free-disk-space.sh
+
+      - name: Setup mold linker
+        if: matrix.target.os == 'ubuntu-latest'
+        uses: rui314/setup-mold@v1
+
+      - name: Install nasm
+        if: matrix.target.os == 'windows-latest'
+        uses: ilammy/setup-nasm@v1.5.2
+
       - name: Install OpenSSL
-        if: matrix.target.triple == 'x86_64-pc-windows-msvc'
-        run: vcpkg install openssl:x64-windows
-      - name: Install OpenSSL
-        if: matrix.target.triple == 'i686-pc-windows-msvc'
-        run: vcpkg install openssl:x86-windows
+        if: matrix.target.os == 'windows-latest'
+        shell: bash
+        run: |
+          set -e
+          choco install openssl --version=1.1.1.2100 -y --no-progress
+          echo 'OPENSSL_DIR=C:\Program Files\OpenSSL' >> $GITHUB_ENV
+          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $GITHUB_ENV
 
-      - name: Install ${{ matrix.version }}
-        uses: actions-rs/toolchain@v1
+      - name: Install Rust (${{ matrix.version.name }})
+        uses: actions-rust-lang/setup-rust-toolchain@v1.15.2
         with:
-          toolchain: ${{ matrix.version }}-${{ matrix.target.triple }}
-          profile: minimal
-          override: true
+          toolchain: ${{ matrix.version.version }}
 
-      # - name: Install MSYS2
-      #   if: matrix.target.triple == 'x86_64-pc-windows-gnu'
-      #   uses: msys2/setup-msys2@v2
-      # - name: Install MinGW Packages
-      #   if: matrix.target.triple == 'x86_64-pc-windows-gnu'
-      #   run: |
-      #     msys2 -c 'pacman -Sy --noconfirm pacman'
-      #     msys2 -c 'pacman --noconfirm -S base-devel pkg-config'
-
-      # - name: Generate Cargo.lock
-      #   uses: actions-rs/cargo@v1
-      #   with:
-      #     command: generate-lockfile
-      # - name: Cache Dependencies
-      #   uses: Swatinem/rust-cache@v1.2.0
-
-      - name: Install cargo-hack
-        uses: actions-rs/cargo@v1
+      - name: Install just, cargo-hack, cargo-nextest, cargo-ci-cache-clean
+        uses: taiki-e/install-action@v2.62.45
         with:
-          command: install
-          args: cargo-hack
+          tool: just,cargo-hack,cargo-nextest,cargo-ci-cache-clean
 
-      - name: check minimal
-        uses: actions-rs/cargo@v1
-        with:
-          command: hack
-          args: check --workspace --no-default-features
+      - name: Generate Cargo.lock
+        run: cargo generate-lockfile
 
-      - name: check minimal + tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: hack
-          args: check --workspace --no-default-features --tests --examples
+      - name: workaround MSRV issues
+        if: matrix.version.name == 'msrv'
+        run: just downgrade-for-msrv
 
-      - name: check default
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --workspace --tests --examples
+      - name: check lib
+        if: >
+          matrix.target.os != 'ubuntu-latest'
+          && matrix.target.triple != 'x86_64-pc-windows-gnu'
+        run: cargo ci-check-lib
+      - name: check lib
+        if: matrix.target.os == 'ubuntu-latest'
+        run: cargo ci-check-lib-linux
+      - name: check lib
+        if: matrix.target.triple != 'x86_64-pc-windows-gnu'
+        run: cargo ci-check-min
 
       - name: check full
         # TODO: compile OpenSSL and run tests on MinGW
-        if: matrix.target.triple != 'x86_64-pc-windows-gnu'
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --workspace --all-features --tests --examples
+        if: >
+          matrix.target.os != 'ubuntu-latest'
+          && matrix.target.triple != 'x86_64-pc-windows-gnu'
+        run: cargo ci-check
+      - name: check all
+        if: matrix.target.os == 'ubuntu-latest'
+        run: cargo ci-check-linux
 
       - name: tests
-        if: matrix.target.triple != 'x86_64-pc-windows-gnu'
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace --all-features --no-fail-fast -- --nocapture
+        run: just test
 
-      - name: Generate coverage file
-        if: >
-          matrix.target.os == 'ubuntu-latest'
-          && matrix.version == 'stable'
-          && github.ref == 'refs/heads/master'
-        run: |
-          cargo install cargo-tarpaulin
-          cargo tarpaulin --out Xml --verbose
-      - name: Upload to Codecov
-        if: >
-          matrix.target.os == 'ubuntu-latest'
-          && matrix.version == 'stable'
-          && github.ref == 'refs/heads/master'
-        uses: codecov/codecov-action@v1
-        with:
-          file: cobertura.xml
+      - name: CI cache clean
+        run: cargo-ci-cache-clean
 
-      - name: Clear the cargo caches
-        run: |
-          cargo install cargo-cache --no-default-features --features ci-autoclean
-          cargo-cache
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust (nightly)
+        uses: actions-rust-lang/setup-rust-toolchain@v1.15.2
+        with:
+          toolchain: nightly
+
+      - name: Install just
+        uses: taiki-e/install-action@v2.62.45
+        with:
+          tool: just
+
+      - name: doc tests
+        run: just test-docs

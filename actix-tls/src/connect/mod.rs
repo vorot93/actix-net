@@ -1,74 +1,66 @@
-//! TCP connector services for Actix ecosystem.
+//! TCP and TLS connector services.
 //!
 //! # Stages of the TCP connector service:
-//! - Resolve [`Address`] with given [`Resolver`] and collect list of socket addresses.
-//! - Establish TCP connection and return [`TcpStream`].
+//! 1. Resolve [`Host`] (if needed) with given [`Resolver`] and collect list of socket addresses.
+//! 1. Establish TCP connection and return [`TcpStream`].
 //!
 //! # Stages of TLS connector services:
-//! - Establish [`TcpStream`] with connector service.
-//! - Wrap the stream and perform connect handshake with remote peer.
-//! - Return certain stream type that impls `AsyncRead` and `AsyncWrite`.
-//!
-//! # Package feature
-//! * `openssl` - enables TLS support via `openssl` crate
-//! * `rustls` - enables TLS support via `rustls` crate
+//! 1. Resolve DNS and establish a [`TcpStream`] with the TCP connector service.
+//! 1. Wrap the stream and perform connect handshake with remote peer.
+//! 1. Return wrapped stream type that implements `AsyncRead` and `AsyncWrite`.
 //!
 //! [`TcpStream`]: actix_rt::net::TcpStream
 
-#[allow(clippy::module_inception)]
-mod connect;
+mod connect_addrs;
+mod connection;
 mod connector;
 mod error;
+mod host;
+mod info;
 mod resolve;
-mod service;
-pub mod ssl;
+mod resolver;
+pub mod tcp;
+
 #[cfg(feature = "uri")]
 mod uri;
 
-use actix_rt::net::TcpStream;
-use actix_service::{Service, ServiceFactory};
+#[cfg(feature = "openssl")]
+pub mod openssl;
 
-pub use self::connect::{Address, Connect, Connection};
-pub use self::connector::{TcpConnector, TcpConnectorFactory};
-pub use self::error::ConnectError;
-pub use self::resolve::{Resolve, Resolver, ResolverFactory};
-pub use self::service::{ConnectService, ConnectServiceFactory};
+#[cfg(any(
+    feature = "rustls-0_20-webpki-roots",
+    feature = "rustls-0_20-native-roots",
+))]
+pub mod rustls_0_20;
 
-/// Create TCP connector service.
-pub fn new_connector<T: Address + 'static>(
-    resolver: Resolver,
-) -> impl Service<Connect<T>, Response = Connection<T, TcpStream>, Error = ConnectError> + Clone
-{
-    ConnectServiceFactory::new(resolver).service()
-}
+#[doc(hidden)]
+#[cfg(any(
+    feature = "rustls-0_20-webpki-roots",
+    feature = "rustls-0_20-native-roots",
+))]
+pub use rustls_0_20 as rustls;
 
-/// Create TCP connector service factory.
-pub fn new_connector_factory<T: Address + 'static>(
-    resolver: Resolver,
-) -> impl ServiceFactory<
-    Connect<T>,
-    Config = (),
-    Response = Connection<T, TcpStream>,
-    Error = ConnectError,
-    InitError = (),
-> + Clone {
-    ConnectServiceFactory::new(resolver)
-}
+#[cfg(any(
+    feature = "rustls-0_21-webpki-roots",
+    feature = "rustls-0_21-native-roots",
+))]
+pub mod rustls_0_21;
 
-/// Create connector service with default parameters.
-pub fn default_connector<T: Address + 'static>(
-) -> impl Service<Connect<T>, Response = Connection<T, TcpStream>, Error = ConnectError> + Clone
-{
-    new_connector(Resolver::Default)
-}
+#[cfg(feature = "rustls-0_22")]
+pub mod rustls_0_22;
 
-/// Create connector service factory with default parameters.
-pub fn default_connector_factory<T: Address + 'static>() -> impl ServiceFactory<
-    Connect<T>,
-    Config = (),
-    Response = Connection<T, TcpStream>,
-    Error = ConnectError,
-    InitError = (),
-> + Clone {
-    new_connector_factory(Resolver::Default)
-}
+#[cfg(feature = "rustls-0_23")]
+pub mod rustls_0_23;
+
+#[cfg(feature = "native-tls")]
+pub mod native_tls;
+
+pub use self::{
+    connection::Connection,
+    connector::{Connector, ConnectorService},
+    error::ConnectError,
+    host::Host,
+    info::ConnectInfo,
+    resolve::Resolve,
+    resolver::{Resolver, ResolverService},
+};
